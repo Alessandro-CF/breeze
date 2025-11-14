@@ -3,7 +3,8 @@ import InputLabel from '@/Components/InputLabel';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import { Transition } from '@headlessui/react';
-import { Link, useForm, usePage } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 
 export default function UpdateProfileInformation({
     mustVerifyEmail,
@@ -12,16 +13,40 @@ export default function UpdateProfileInformation({
 }) {
     const user = usePage().props.auth.user;
 
-    const { data, setData, patch, errors, processing, recentlySuccessful } =
-        useForm({
-            name: user.name,
-            email: user.email,
-        });
+    const [data, setData] = useState({ name: user.name, email: user.email });
+    const [errors, setErrors] = useState({});
+    const [processing, setProcessing] = useState(false);
+    const [saved, setSaved] = useState(false);
 
-    const submit = (e) => {
+    const submit = async (e) => {
         e.preventDefault();
 
-        patch(route('profile.update'));
+        setProcessing(true);
+        setErrors({});
+
+        try {
+            const res = await fetch('/api/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ name: data.name, email: data.email }),
+            });
+
+            if (res.status === 200) {
+                setSaved(true);
+                setTimeout(() => setSaved(false), 3000);
+            } else if (res.status === 422) {
+                const json = await res.json();
+                setErrors(json.errors || {});
+            } else {
+                const json = await res.json().catch(() => ({}));
+                setErrors({ general: json.message || 'Unexpected error' });
+            }
+        } catch (err) {
+            setErrors({ general: 'Network error' });
+        }
+
+        setProcessing(false);
     };
 
     return (
@@ -44,7 +69,7 @@ export default function UpdateProfileInformation({
                         id="name"
                         className="mt-1 block w-full"
                         value={data.name}
-                        onChange={(e) => setData('name', e.target.value)}
+                        onChange={(e) => setData({ ...data, name: e.target.value })}
                         required
                         isFocused
                         autoComplete="name"
@@ -61,7 +86,7 @@ export default function UpdateProfileInformation({
                         type="email"
                         className="mt-1 block w-full"
                         value={data.email}
-                        onChange={(e) => setData('email', e.target.value)}
+                        onChange={(e) => setData({ ...data, email: e.target.value })}
                         required
                         autoComplete="username"
                     />
@@ -96,7 +121,7 @@ export default function UpdateProfileInformation({
                     <PrimaryButton disabled={processing}>Save</PrimaryButton>
 
                     <Transition
-                        show={recentlySuccessful}
+                        show={saved}
                         enter="transition ease-in-out"
                         enterFrom="opacity-0"
                         leave="transition ease-in-out"

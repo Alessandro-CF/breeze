@@ -4,24 +4,14 @@ import InputLabel from '@/Components/InputLabel';
 import Modal from '@/Components/Modal';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
-import { useForm } from '@inertiajs/react';
 import { useRef, useState } from 'react';
 
 export default function DeleteUserForm({ className = '' }) {
     const [confirmingUserDeletion, setConfirmingUserDeletion] = useState(false);
     const passwordInput = useRef();
-
-    const {
-        data,
-        setData,
-        delete: destroy,
-        processing,
-        reset,
-        errors,
-        clearErrors,
-    } = useForm({
-        password: '',
-    });
+    const [data, setData] = useState({ password: '' });
+    const [processing, setProcessing] = useState(false);
+    const [errors, setErrors] = useState({});
 
     const confirmUserDeletion = () => {
         setConfirmingUserDeletion(true);
@@ -29,20 +19,37 @@ export default function DeleteUserForm({ className = '' }) {
 
     const deleteUser = (e) => {
         e.preventDefault();
+        setProcessing(true);
 
-        destroy(route('profile.destroy'), {
-            preserveScroll: true,
-            onSuccess: () => closeModal(),
-            onError: () => passwordInput.current.focus(),
-            onFinish: () => reset(),
-        });
+        fetch('/api/profile', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ password: data.password }),
+        })
+            .then(async (res) => {
+                if (res.status === 200 || res.status === 204) {
+                    closeModal();
+                } else if (res.status === 422) {
+                    const json = await res.json();
+                    setErrors(json.errors || {});
+                    passwordInput.current.focus();
+                } else {
+                    const json = await res.json().catch(() => ({}));
+                    setErrors({ general: json.message || 'Unexpected error' });
+                }
+            })
+            .catch(() => setErrors({ general: 'Network error' }))
+            .finally(() => {
+                setProcessing(false);
+                setData({ password: '' });
+            });
     };
 
     const closeModal = () => {
         setConfirmingUserDeletion(false);
-
-        clearErrors();
-        reset();
+        setErrors({});
+        setData({ password: '' });
     };
 
     return (
@@ -91,7 +98,7 @@ export default function DeleteUserForm({ className = '' }) {
                             ref={passwordInput}
                             value={data.password}
                             onChange={(e) =>
-                                setData('password', e.target.value)
+                                setData({ ...data, password: e.target.value })
                             }
                             className="mt-1 block w-3/4"
                             isFocused
